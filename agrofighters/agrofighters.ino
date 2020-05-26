@@ -46,11 +46,10 @@ void loop()
   }
   else
   {
-    Serial.println("");
-
     Serial.print("IP address: ");
     Serial.println(WiFi.localIP()); //IP address assigned to your ESP
     ReadingSensores(true);
+    StartWork();
   }
 }
 
@@ -63,17 +62,56 @@ void CheckConnetion()
     delay(1000);
     contavilizador++;
     digitalWrite(led1, LOW);
+    if (contavilizador > 7 ) {
+      ReadingSensores(false);
+      StartWork();
+    }
     if (contavilizador > 60)
     {
-      AlertConnection();
+      AlertConnection(1);
     }
   }
   digitalWrite(led1, HIGH);
   Serial.println("Conexión exitosa a WiFi");
 }
 
-void AlertConnection()
+void AlertConnection(int i)
 {
+  DynamicJsonDocument alert(1024);
+  String response = "";
+  int res;
+  HTTPClient http;
+
+  http.begin("https://agrofighterspro.herokuapp.com/alert/update/");
+  http.addHeader("Content-Type", "application/json");
+
+  switch (i) {
+    case 1:
+      alert["alect_connetion"] = "true";
+      deserializeJson(alert, response);
+      res = http.PUT(response);
+      break;
+    case 2:
+      alert["error_sensor_temperature"] = "true";
+      deserializeJson(alert, response);
+      res = http.PUT(response);
+      break;
+    case 3:
+      alert["error_sensor_humidity"] = "true";
+      deserializeJson(alert, response);
+      res = http.PUT(response);
+      break;
+    case 4:
+      alert["engine_error_1"] = "true";
+      deserializeJson(alert, response);
+      res = http.PUT(response);
+      break;
+    case 5:
+      alert["engine_error_2"] = "true";
+      deserializeJson(alert, response);
+      res = http.PUT(response);
+      break;
+  }
 }
 
 void ReadingSensores(boolean connetion)
@@ -82,18 +120,12 @@ void ReadingSensores(boolean connetion)
   data[1] = dht.readTemperature(); // Leemos la temperatura en grados centígrados (por defecto)
   data[2] = analogRead(A0);
 
-  Serial.println(data[0]);
-  Serial.println(data[1]);
-  Serial.println(data[2]);
-  Engginers(1);
-  /*
-    if (connetion == true)
-    {
-    SendData();
+  if (connetion == true)
+  {
+    if (checkReadingSensor() == true) {
+      SendData();
     }
-    else
-    {
-    }*/
+  }
 }
 
 void SendData()
@@ -107,7 +139,6 @@ void SendData()
   http.begin("https://agrofighterspro.herokuapp.com/get/date/");
   int httpCode = http.GET();
 
-  Serial.println("res " + httpCode);
   if (httpCode > 0)
   {
     doc["date"] = http.getString();
@@ -118,8 +149,6 @@ void SendData()
 
   http.begin("https://agrofighterspro.herokuapp.com/get/time/");
   int httpCode1 = http.GET();
-
-  Serial.println("res " + httpCode);
   if (httpCode1 > 0)
   {
     doc["time"] = http.getString();
@@ -138,21 +167,33 @@ void SendData()
   http.begin("https://agrofighterspro.herokuapp.com/temperature/insert/");
   http.addHeader("Content-Type", "application/json");
 
-  String v = "{\"sensor\":\"BME280\",\"value1\":\"24.25\",\"value2\":\"49.54\",\"value3\":\"1005.14\"}";
-  int httpCode2 = http.POST(v);
 
+  deserializeJson(doc, response1);
+
+  int httpCode2 = http.POST(response1);
 
   http.end();
   http.begin("https://agrofighterspro.herokuapp.com/humidity/insert/");
   http.addHeader("Content-Type", "application/json");
 
-  int httpCode3 = http.POST(doc2, &response2);
+  deserializeJson(doc1, response2);
+
+  int httpCode3 = http.POST(response2);
 
   http.end();
 }
 
-void checkReadingSensor()
+boolean checkReadingSensor()
 {
+  if ((isnan(data[0]) || isnan(data[1]))) {
+    AlertConnection(2);
+    return false;
+  }
+  if (isnan(data[2])) {
+    AlertConnection(3);
+    return false;
+  }
+  return true;
 }
 
 void Engginers(int direccion)
@@ -173,8 +214,26 @@ void Engginers(int direccion)
     {
       digitalWrite(motorA, HIGH);
       digitalWrite(motorB, LOW);
+      delay(15000);
     }
   }
+}
 
+void StartWork() {
+  if (data[1] > 27 && data[2] < 400) {
+    if (Cortina = false) {
+      Engginers(1);
+    }
+  } else {
+    if (Cortina = true && data[2] <= 400) {
+      //activar roseador
+    }
+
+  } if (data[2] > 400 && Cortina == true) {
+    //cerrar roseador
+  } else if (data[2] > 400 && Cortina == false) {
+    //cerrar cortina
+    Engginers(2);
+  }
 
 }
